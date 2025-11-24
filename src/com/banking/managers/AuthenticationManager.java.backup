@@ -1,0 +1,408 @@
+package com.banking.managers;
+
+import com.banking.auth.User;
+import com.banking.auth.Admin;
+import com.banking.auth.UserAccount;
+import com.banking.auth.UserRole;
+import com.banking.auth.AuditLog;
+import java.util.LinkedList;
+import java.util.Scanner;
+import java.util.Random;
+
+/**
+ * AuthenticationManager Class
+ *
+ * Manages all authentication and authorization operations for the Banking System.
+ * Handles:
+ * - User login with password verification
+ * - Failed attempt tracking
+ * - Audit trail logging (LinkedList demonstrating chronological storage)
+ * - Role-based permission checking
+ *
+ * Demonstrates:
+ * - LinkedList<User> for user registry (stores users)
+ * - LinkedList<AuditLog> for audit trail (logs all operations chronologically)
+ * - Security best practices (attempt limiting, audit logging)
+ * - Real-world banking security patterns
+ */
+public class AuthenticationManager {
+    private LinkedList<User> userRegistry;  // All system users
+    private LinkedList<AuditLog> auditTrail;  // All system operations logged
+    private User currentUser;  // Currently logged-in user
+    private int loginAttempts;  // Track failed login attempts
+
+    /**
+     * Constructor: Initializes the authentication manager.
+     */
+    public AuthenticationManager() {
+        this.userRegistry = new LinkedList<>();
+        this.auditTrail = new LinkedList<>();
+        this.currentUser = null;
+        this.loginAttempts = 0;
+    }
+
+    // ===== DATA ACCESS (Getters) =====
+
+    /**
+     * Returns the current logged-in user.
+     *
+     * @return the current User, or null if not logged in
+     */
+    public User getCurrentUser() {
+        return this.currentUser;
+    }
+
+    // ===== USER MANAGEMENT =====
+
+    /**
+     * Registers a new user in the system.
+     * Used during demo data setup to create admin and customer accounts.
+     *
+     * Method calls:
+     * - Iterates LinkedList<User> (userRegistry) to check for duplicate usernames (CC 204)
+     * - Calls User.getUsername() to compare usernames
+     * - Calls LinkedList.add() to register user (CC 204 data structure)
+     * - Calls this.logAction() to log registration to audit trail
+     *
+     * @param user the user to register
+     * @return true if registration successful, false if user already exists
+     */
+    public boolean registerUser(User user) {
+        if (user == null) return false;
+
+        // Check if username already exists
+        for (User existing : userRegistry) {
+            if (existing.getUsername().equals(user.getUsername())) {
+                return false;
+            }
+        }
+
+        userRegistry.add(user);
+        logAction(null, user.getUserRole(), "USER_REGISTERED", "Username: " + user.getUsername());
+        return true;
+    }
+
+    // ===== SESSION MANAGEMENT (Login/Logout) =====
+
+    /**
+     * Authenticates a user by username and password.
+     * Implements 3-attempt limit for security (prevents brute force).
+     * Uses generic error message for security (prevents username enumeration).
+     * This method contains the ACTUAL authentication logic (called by BankingSystem).
+     *
+     * Method calls:
+     * - Calls Scanner.nextLine() twice to read username and password
+     * - Iterates LinkedList<User> (userRegistry) to search for matching user (CC 204)
+     * - Calls User.getUsername() to compare usernames
+     * - Calls User.authenticate() to verify password (POLYMORPHIC - Admin vs UserAccount)
+     * - Calls this.logAction() for both success and failure logging
+     *
+     * @param sc Scanner for user input
+     * @return the authenticated User if successful, null if authentication failed
+     */
+    public User login(Scanner sc) {
+        System.out.println("\n╔═══════════════════════════════════╗");
+        System.out.println("║   BANKING SYSTEM - LOGIN REQUIRED   ║");
+        System.out.println("╚═══════════════════════════════════╝\n");
+
+        this.loginAttempts = 0;
+        int maxAttempts = 3;
+
+        while (loginAttempts < maxAttempts) {
+            System.out.print("→ Username: ");
+            String username = sc.nextLine().trim();
+
+            System.out.print("→ Password: ");
+            String password = sc.nextLine().trim();
+
+            // Try to authenticate (checks username AND password together)
+            boolean authenticated = false;
+            User foundUser = null;
+
+            for (User user : userRegistry) {
+                if (user.getUsername().equals(username) && user.authenticate(password)) {
+                    authenticated = true;
+                    foundUser = user;
+                    break;
+                }
+            }
+
+            // Check result and handle accordingly
+            if (authenticated) {
+                this.currentUser = foundUser;
+                System.out.println("✓ Login successful! Welcome, " + username + "\n");
+                logAction(username, foundUser.getUserRole(), "LOGIN_SUCCESS", "User logged in successfully");
+                return foundUser;
+            } else {
+                // Generic error message for security (doesn't reveal if username or password was wrong)
+                loginAttempts++;
+                System.out.println("✗ Invalid credentials. Attempt " + loginAttempts + "/" + maxAttempts);
+                logAction(null, null, "LOGIN_FAILED", "Invalid credentials for: " + username);
+            }
+        }
+
+        System.out.println("\n✗ LOGIN FAILED: Maximum attempts exceeded. Exiting...\n");
+        return null;
+    }
+
+    /**
+     * Logs out the current user.
+     */
+    public void logout() {
+        if (currentUser != null) {
+            System.out.println("✓ " + currentUser.getUsername() + " logged out successfully.");
+            logAction(currentUser.getUsername(), currentUser.getUserRole(), "LOGOUT", "User logged out");
+            currentUser = null;
+        }
+    }
+
+    // ===== PERMISSIONS =====
+
+    /**
+     * Checks if current user has a specific permission.
+     *
+     * @param permission the permission to check
+     * @return true if current user has permission, false otherwise
+     */
+    public boolean hasPermission(String permission) {
+        if (currentUser == null) return false;
+        return currentUser.hasPermission(permission);
+    }
+
+    // ===== AUDIT TRAIL (Logging & Display) =====
+
+    /**
+     * Logs an action to the audit trail.
+     * Used to track all system operations for security/compliance.
+     *
+     * Method calls:
+     * - Calls User.getUsername() and User.getUserRole() if currentUser available
+     * - Creates new AuditLog object with action details
+     * - Calls LinkedList.add() to append to audit trail (CC 204)
+     *
+     * @param username the user performing the action (null for system actions)
+     * @param userRole the role of the user
+     * @param action the action performed
+     * @param details additional details about the action
+     */
+    public void logAction(String username, UserRole userRole, String action, String details) {
+        // Only log if we have valid info
+        if (action == null) return;
+
+        // If no username provided, use current user if available
+        if (username == null && currentUser != null) {
+            username = currentUser.getUsername();
+            if (userRole == null) {
+                userRole = currentUser.getUserRole();
+            }
+        }
+
+        // Only add to audit trail if we have username and role
+        if (username != null && userRole != null) {
+            AuditLog log = new AuditLog(username, userRole, action, details);
+            auditTrail.add(log);
+        }
+    }
+
+    // ===== AUTO-GENERATION HELPER METHODS =====
+
+    /**
+     * Generates a username from a customer's full name.
+     * Converts to lowercase, replaces spaces with underscores, and ensures uniqueness.
+     * Example: "Diana Prince" → "diana_prince" (or "diana_prince1" if taken)
+     *
+     * Method calls:
+     * - Calls String.toLowerCase(), trim(), replaceAll() for formatting username
+     * - Iterates LinkedList<User> (userRegistry) to check username uniqueness (CC 204)
+     * - Calls User.getUsername() to compare existing usernames
+     * - Uses counter-based collision resolution for duplicate usernames
+     *
+     * @param fullName the customer's full name
+     * @return generated username (unique in the system)
+     */
+    public String generateUsername(String fullName) {
+        if (fullName == null || fullName.trim().isEmpty()) {
+            return null;
+        }
+
+        // Convert to lowercase and replace spaces with underscores
+        String username = fullName.toLowerCase().trim().replaceAll("\\s+", "_");
+        String original = username;
+
+        // Ensure uniqueness by adding counter if needed
+        int counter = 1;
+        while (true) {
+            // Check if username already exists using a traditional for loop
+            boolean usernameExists = false;
+            for (User user : this.userRegistry) {
+                if (user.getUsername().equals(username)) {
+                    usernameExists = true;
+                    break;
+                }
+            }
+
+            if (usernameExists) {
+                username = original + counter++;
+            } else {
+                break;  // Username is unique
+            }
+        }
+
+        return username;
+    }
+
+    /**
+     * Generates a temporary password for auto-created customer accounts.
+     * Format: "Welcome" + first 2 chars of username + random 4-digit number
+     * Example: "diana_prince" → "Welcomedi4872"
+     *
+     * Method calls:
+     * - Calls String.substring() to extract first 2 characters of username
+     * - Calls Random.nextInt() to generate random 4-digit number (1000-9999)
+     * - Concatenates strings to create temporary password
+     *
+     * @param username the customer's username
+     * @return temporary password in format: Welcome[2chars][4digits]
+     */
+    public String generateTemporaryPassword(String username) {
+        if (username == null || username.isEmpty()) {
+            return null;
+        }
+
+        // Get first 2 characters of username (or full username if shorter)
+        String firstTwo = username.length() >= 2 ? username.substring(0, 2) : username;
+
+        // Generate random 4-digit number (1000-9999)
+        Random random = new Random();
+        int randomNum = 1000 + random.nextInt(9000);
+
+        return "Welcome" + firstTwo + randomNum;
+    }
+
+    // ===== PASSWORD CHANGE METHOD =====
+
+    /**
+     * Changes the password for a user using the immutable object pattern.
+     * Validates old password, creates new User object with new password,
+     * and replaces the old User in the registry.
+     *
+     * This approach maintains the immutability design from Phase 4:
+     * - User objects never mutate after creation
+     * - Password changes create new User objects
+     * - Enterprise banking security pattern
+     *
+     * Method calls:
+     * - Calls LinkedList.get() to find user by index (CC 204)
+     * - Calls User.authenticate() to verify old password
+     * - Uses instanceof to check Admin vs UserAccount (RUNTIME POLYMORPHISM - CIT 207)
+     * - Creates new Admin() or new UserAccount() object (immutable pattern)
+     * - Calls UserAccount.getLinkedCustomerId() to preserve customer linkage
+     * - Calls LinkedList.set() to replace old user with new user (CC 204)
+     * - Calls this.logAction() to log password change to audit trail
+     *
+     * @param username the username of the user changing password
+     * @param oldPassword the current password (must match)
+     * @param newPassword the new password to set
+     * @return the new User object if successful, null if failed
+     */
+    public User changePassword(String username, String oldPassword, String newPassword) {
+        // Step 1: Validate inputs
+        if (username == null || oldPassword == null || newPassword == null) {
+            System.out.println("✗ Username and passwords cannot be null");
+            return null;
+        }
+
+        // Step 2: Find the user
+        User currentUser = null;
+        int userIndex = -1;
+        for (int i = 0; i < this.userRegistry.size(); i++) {
+            if (this.userRegistry.get(i).getUsername().equals(username)) {
+                currentUser = this.userRegistry.get(i);
+                userIndex = i;
+                break;
+            }
+        }
+
+        if (currentUser == null) {
+            System.out.println("✗ User not found: " + username);
+            return null;
+        }
+
+        // Step 3: Verify old password matches
+        if (!currentUser.authenticate(oldPassword)) {
+            System.out.println("✗ Current password is incorrect");
+            return null;
+        }
+
+        // Step 4: Validate new password
+        if (newPassword.isEmpty()) {
+            System.out.println("✗ New password cannot be empty");
+            return null;
+        }
+
+        if (newPassword.length() < 4) {
+            System.out.println("✗ New password must be at least 4 characters");
+            return null;
+        }
+
+        if (oldPassword.equals(newPassword)) {
+            System.out.println("✗ New password must be different from current password");
+            return null;
+        }
+
+        // Step 5: Create new User object with new password (immutable pattern)
+        User newUser = null;
+        try {
+            if (currentUser instanceof Admin) {
+                // Create new Admin with new password
+                newUser = new Admin(username, newPassword);
+            } else if (currentUser instanceof UserAccount) {
+                // Create new UserAccount with new password, preserving linked customer ID
+                UserAccount userAccount = (UserAccount) currentUser;
+                newUser = new UserAccount(username, newPassword, userAccount.getLinkedCustomerId());
+                // Preserve the passwordChangeRequired flag from the current user
+                newUser.setPasswordChangeRequired(currentUser.isPasswordChangeRequired());
+            } else {
+                System.out.println("✗ Unknown user type");
+                return null;
+            }
+        } catch (Exception e) {
+            System.out.println("✗ Error creating new user object: " + e.getMessage());
+            return null;
+        }
+
+        // Step 6: Replace old user with new user in registry (LinkedList replacement)
+        try {
+            this.userRegistry.set(userIndex, newUser);
+        } catch (Exception e) {
+            System.out.println("✗ Error updating user registry: " + e.getMessage());
+            return null;
+        }
+
+        // Step 7: Log the password change to audit trail
+        logAction(username, currentUser.getUserRole(), "CHANGE_PASSWORD", "User successfully changed their password");
+
+        return newUser;  // Return new User object for caller to use as currentUser
+    }
+
+    /**
+     * Displays the complete audit trail to console.
+     * Useful for security review and compliance.
+     */
+    public void displayAuditTrail() {
+        if (auditTrail.isEmpty()) {
+            System.out.println("No audit logs available.");
+            return;
+        }
+
+        System.out.println("\n╔═══════════════════════════════════════════════════════════════════════════════╗");
+        System.out.println("║                            SYSTEM AUDIT TRAIL                              ║");
+        System.out.println("╚═══════════════════════════════════════════════════════════════════════════════╝\n");
+
+        for (AuditLog log : auditTrail) {
+            System.out.println(log.toString());
+        }
+
+        System.out.println("\nTotal operations logged: " + auditTrail.size() + "\n");
+    }
+}
