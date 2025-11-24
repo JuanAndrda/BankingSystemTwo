@@ -646,5 +646,208 @@ LinkedList<Account> accounts = customer.getAccounts();  // [ACC001, ACC002, ACC0
 
 ---
 
+## Password Management & Security
+
+### Auto-Generated Password System
+
+When a new customer is created through the integrated onboarding workflow, the system automatically generates login credentials:
+
+#### Password Format: `Welcomexx####`
+
+- **"Welcome"** - Prefix
+- **"xx"** - First 2 letters of first name (lowercase)
+- **"####"** - 4 random digits
+
+**Example:**
+```java
+// Customer name: "Alice Johnson"
+// Generated password: "Welcomeal1234"
+//                      ^^^^^^ ^^----
+//                      prefix  name  random
+```
+
+#### Username Generation
+
+Usernames are generated from the customer's name:
+- Format: `firstname_lastname` (lowercase)
+- Handles duplicates by adding counter: `alice_johnson2`, `alice_johnson3`
+
+**Code Location:** `AuthenticationManager.java`
+
+```java
+public String generateUsername(String fullName) {
+    String[] parts = fullName.toLowerCase().split(" ");
+    String baseUsername = parts[0];
+    if (parts.length > 1) {
+        baseUsername += "_" + parts[1];
+    }
+
+    // Handle duplicates
+    String username = baseUsername;
+    int counter = 2;
+    while (usernameExists(username)) {
+        username = baseUsername + counter;
+        counter++;
+    }
+
+    return username;
+}
+
+public String generateTemporaryPassword(String firstName) {
+    String prefix = "Welcome";
+    String namepart = firstName.substring(0, Math.min(2, firstName.length())).toLowerCase();
+    int randomDigits = (int) (Math.random() * 10000);
+    return String.format("%s%s%04d", prefix, namepart, randomDigits);
+}
+```
+
+### Password Change Requirement
+
+**New customers MUST change their auto-generated password on first login.**
+
+```java
+// In UserAccount.java
+public class UserAccount extends User {
+    private boolean passwordChangeRequired;  // Set to true for new accounts
+
+    // Customer sees this message on first login:
+    // "⚠ You must change your password before accessing the system."
+    // "Please select option #21 (Change Password) from the menu."
+}
+```
+
+**Password Change Flow:**
+1. New customer created with auto-generated password
+2. Customer logs in with temporary password
+3. System detects `passwordChangeRequired = true`
+4. Forces customer to menu option #21 (Change Password)
+5. Customer enters new password
+6. System creates NEW User object (immutable pattern)
+7. Old User replaced with new User
+8. `passwordChangeRequired = false`
+
+**Security Benefits:**
+- ✅ Prevents use of predictable passwords
+- ✅ Ensures only the customer knows their password
+- ✅ Admin never needs to know customer passwords
+- ✅ Complies with security best practices
+
+---
+
+## Integrated Onboarding Workflow
+
+The system provides a seamless onboarding experience that creates everything in one session.
+
+### Complete Flow: Customer → Profile → Account
+
+**Location:** `CustomerManager.handleCreateCustomer()`
+
+```
+┌────────────────────────────────────────────────────────────┐
+│ STEP 1: Create Customer                                    │
+│   - Auto-generate customer ID (C001, C002, etc.)          │
+│   - Enter customer name                                    │
+│   - Add to customer list                                   │
+└──────────────────┬─────────────────────────────────────────┘
+                   ▼
+┌────────────────────────────────────────────────────────────┐
+│ STEP 2: Auto-Generate Login Credentials                   │
+│   - Username: firstname_lastname                           │
+│   - Password: Welcomexx#### (temporary)                    │
+│   - Create UserAccount linked to customerId                │
+│   - Set passwordChangeRequired = true                      │
+└──────────────────┬─────────────────────────────────────────┘
+                   ▼
+┌────────────────────────────────────────────────────────────┐
+│ STEP 3: Create Customer Profile (Optional)                │
+│   - Prompt: "Create profile for [name]? (yes/no)"         │
+│   - If yes: Enter address, phone, email                   │
+│   - Auto-generate profile ID (P001, P002, etc.)           │
+│   - Link profile to customer (bidirectional)              │
+└──────────────────┬─────────────────────────────────────────┘
+                   ▼
+┌────────────────────────────────────────────────────────────┐
+│ STEP 4: Create First Account (Optional)                   │
+│   - Prompt: "Create account now? (yes/no)"                │
+│   - If yes: Choose Savings or Checking                    │
+│   - Enter initial deposit, interest rate, or overdraft    │
+│   - Auto-generate account number (ACC001, ACC002, etc.)   │
+│   - Link account to customer                              │
+└──────────────────┬─────────────────────────────────────────┘
+                   ▼
+┌────────────────────────────────────────────────────────────┐
+│ ONBOARDING COMPLETE!                                       │
+│                                                            │
+│ ╔════════════════════════════════════════╗                │
+│ ║    ONBOARDING COMPLETE                 ║                │
+│ ╠════════════════════════════════════════╣                │
+│ ║ Customer: Alice Johnson (C001)         ║                │
+│ ║ Username: alice_johnson                ║                │
+│ ║ Password: Welcomeal1234 (CHANGE REQ)   ║                │
+│ ║ Profile: Created ✓                     ║                │
+│ ║ Account: ACC001 (Savings) ✓            ║                │
+│ ╚════════════════════════════════════════╝                │
+└────────────────────────────────────────────────────────────┘
+```
+
+### Why This Workflow?
+
+**Before (Manual Process):**
+```
+1. Admin: Create customer       (Menu #10)
+2. Admin: Create user           (Menu #XX)
+3. Admin: Create profile        (Menu #12)
+4. Admin: Create account        (Menu #1)
+   Total: 4 separate operations!
+```
+
+**After (Integrated Onboarding):**
+```
+1. Admin: Create customer → All done in one flow!
+   Total: 1 operation!
+```
+
+**Benefits:**
+- ✅ Faster customer onboarding
+- ✅ Reduces human error (no forgotten steps)
+- ✅ Consistent data creation
+- ✅ Better user experience for admin
+- ✅ Automatic credential generation prevents weak passwords
+
+---
+
+## Summary: The Complete Chain
+
+### From Creation to Login to Access
+
+1. **Admin creates Customer** → `Customer("C001", "Alice Johnson")`
+
+2. **System creates UserAccount** → `UserAccount("alice", "alice123", "C001")`
+   - The `customerId` field ("C001") is the **magic link**!
+
+3. **Customer logs in** → System finds UserAccount → Gets customerId → Finds Customer
+
+4. **Customer accesses accounts** → Customer has LinkedList of accounts → Can perform transactions
+
+5. **Security enforced** → System checks if account.owner.customerId matches user.customerId
+
+### The Core Logic:
+
+```java
+// When user logs in:
+UserAccount user = (UserAccount) currentUser;
+String customerId = user.getCustomerId();  // "C001"
+
+// Find customer:
+Customer customer = findCustomer(customerId);  // Alice Johnson
+
+// Get accounts:
+LinkedList<Account> accounts = customer.getAccounts();  // [ACC001, ACC002, ACC003]
+
+// ✓ User can now access all accounts belonging to their customer!
+```
+
+---
+
 **Created:** November 2024
 **Project:** Banking System - OOP Project Part 2

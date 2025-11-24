@@ -251,29 +251,6 @@ public boolean withdraw(double amount) {
 3. Method called: Determined at **runtime** based on actual object type
 4. This is **runtime polymorphism** (also called dynamic binding)
 
-#### Type 2: Method Overloading (Compile-time Polymorphism)
-
-**Example: Display Methods in Food Class Pattern**
-
-```java
-public class Food extends Product {
-    // Same method name, different parameters
-
-    public void display() {
-        System.out.println("Basic display");
-    }
-
-    public void display(String name) {
-        System.out.println("Hi, " + name);
-        this.display();
-    }
-
-    public void display(String name, String type) {
-        System.out.println("Hi, " + name + " Im " + type);
-    }
-}
-```
-
 **Benefits:**
 - 🎭 **Flexibility** - Same method name, different behaviors
 - 🧩 **Simplicity** - One interface, many implementations
@@ -474,6 +451,116 @@ public class Account {
 - `TransactionProcessor` handles transactions
 - `AccountManager` handles accounts
 - `CustomerManager` handles customers
+
+### 8. Immutability Pattern
+
+**Definition:** Creating objects whose state cannot be modified after construction.
+
+**Example: User Class with Final Fields**
+
+```java
+public abstract class User {
+    // Final fields - cannot be changed after construction
+    private final String username;
+    private final String password;
+    private final UserRole role;
+
+    public User(String username, String password, UserRole role) {
+        this.username = username;
+        this.password = password;
+        this.role = role;
+    }
+
+    // Only getters, no setters!
+    public String getUsername() { return this.username; }
+    public String getPassword() { return this.password; }
+    public UserRole getRole() { return this.role; }
+}
+```
+
+**How Password Change Works:**
+
+```java
+// In AuthenticationManager
+public boolean changePassword(String username, String oldPassword, String newPassword) {
+    User user = findUser(username);
+
+    // Can't modify existing User object (immutable!)
+    // Instead, create a NEW User object
+    if (user instanceof Admin) {
+        User newUser = new Admin(username, newPassword);
+        // Replace old user with new user
+        users.set(index, newUser);
+    }
+}
+```
+
+**Benefits of Immutability:**
+- 🔒 **Thread-Safety** - Immutable objects are inherently thread-safe
+- 🛡️ **Security** - Username and role can't be tampered with
+- 🐛 **Fewer Bugs** - No unexpected state changes
+- 📝 **Audit Trail** - Password changes create new objects (trackable)
+
+### 9. Protected Setters
+
+**Definition:** Using `protected` access modifier to restrict who can modify data.
+
+**Example: Balance Protection in Account Class**
+
+```java
+public abstract class Account {
+    private double balance;
+
+    // Public getter - anyone can READ the balance
+    public double getBalance() {
+        return this.balance;
+    }
+
+    // Protected setter - only SUBCLASSES can WRITE to balance
+    protected void setBalance(double balance) {
+        this.balance = balance;
+    }
+
+    // Public method - controlled way to change balance
+    public void deposit(double amount) {
+        if (validateAmount(amount)) {
+            // Subclass (SavingsAccount, CheckingAccount) calls protected setter
+            this.setBalance(this.getBalance() + amount);
+        }
+    }
+}
+```
+
+**Why Protected Instead of Public?**
+
+If `setBalance()` were public:
+```java
+// BAD: Anyone could do this!
+Account account = findAccount("ACC001");
+account.setBalance(999999.99);  // Bypass all validation! 😱
+```
+
+With protected setter:
+```java
+// GOOD: Only through controlled methods
+Account account = findAccount("ACC001");
+account.setBalance(999999.99);  // ❌ COMPILER ERROR! Method is protected
+account.deposit(1000.00);       // ✅ ONLY WAY - goes through validation
+```
+
+**Access Level Comparison:**
+
+| Modifier | Same Class | Subclass | Package | Outside Package |
+|----------|-----------|----------|---------|-----------------|
+| `private` | ✅ | ❌ | ❌ | ❌ |
+| `protected` | ✅ | ✅ | ✅ | ❌ |
+| `public` | ✅ | ✅ | ✅ | ✅ |
+
+**Benefits of Protected Setters:**
+- 🔐 **Security** - External code can't bypass validation
+- ✅ **Validation** - All balance changes go through controlled methods
+- 🎯 **Encapsulation** - Only subclasses need direct access
+- 🛡️ **Data Integrity** - Prevents unauthorized modifications
 
 ---
 

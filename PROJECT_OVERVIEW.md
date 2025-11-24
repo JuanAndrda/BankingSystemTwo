@@ -59,8 +59,18 @@ To demonstrate comprehensive understanding of:
 - ✅ **Customer Profiles**
   - One-to-one relationship with CustomerProfile
   - Store address, phone, email
-- ✅ **Integrated Onboarding**
-  - Create customer → profile → account in one workflow
+- ✅ **Integrated Onboarding Workflow**
+  - Step 1: Create customer with auto-generated ID (C001, C002, etc.)
+  - Step 2: Auto-generate login credentials (username + temporary password)
+  - Step 3: Create customer profile (address, phone, email)
+  - Step 4: Optionally create first account
+  - All done in one seamless session
+- ✅ **Auto-Generation System**
+  - Customer IDs: C001, C002, C003... (scans for max existing ID)
+  - Account Numbers: ACC001, ACC002... (unique per account)
+  - Profile IDs: P001, P002... (one per customer)
+  - Usernames: firstname_lastname (handles duplicates with counters)
+  - Passwords: Welcomexx#### (8 chars, first 2 letters + 4 random digits)
 
 ### 3. Account Management
 - ✅ **Account Types**
@@ -91,17 +101,28 @@ To demonstrate comprehensive understanding of:
   - Withdraw first, then deposit (only if withdraw succeeds)
 
 ### 5. Security & Auditing
-- ✅ **Access Control**
-  - Customers can only access their own accounts
-  - Admins have full access
+- ✅ **Access Control System**
+  - Customers can only access their own accounts (enforced by canAccessAccount())
+  - Admins have full access to all accounts
+  - UserAccount.linkedCustomerId connects user to customer data
+  - Prevents unauthorized access attempts
+  - Role-based menu display (different menus for admin vs customer)
+- ✅ **Password Management**
+  - Password change feature (Menu #21)
+  - New customers MUST change auto-generated password on first login
+  - Immutable User objects (password change creates new User)
+  - Secure password handling
 - ✅ **Audit Trail**
-  - Log all operations (create, delete, deposit, etc.)
-  - Timestamp all actions
+  - Log all operations (create, delete, deposit, withdraw, transfer, etc.)
+  - Timestamp all actions with LocalDateTime
   - Track which user performed each action
+  - Admin can view full audit trail
+  - Stored in LinkedList<AuditLog>
 - ✅ **Data Validation**
-  - Validate all input (account numbers, customer IDs, etc.)
-  - Centralized validation patterns
-  - Prevent invalid data entry
+  - Validate all input (account numbers, customer IDs, amounts)
+  - Centralized validation patterns (ValidationPatterns class)
+  - Consistent error messages across application
+  - Prevent invalid data entry at multiple layers
 
 ---
 
@@ -364,6 +385,9 @@ This project includes comprehensive documentation:
 3. **CLASS_RELATIONSHIPS.md** - Class diagrams and relationships
 4. **DATA_STRUCTURES.md** - Data structures and algorithms explained
 5. **TRANSACTION_LOGIC_EXPLAINED.md** - Transaction processing flow
+6. **EXCEPTION_HANDLING_NOTES.md** - Exception handling and validation strategies
+7. **CUSTOMER_USER_LINKING_EXPLAINED.md** - How customers link to user accounts
+8. **GETTERS_SETTERS_EXPLAINED.md** - Why models have getters/setters and managers don't
 
 ---
 

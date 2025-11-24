@@ -287,6 +287,317 @@ if (amount <= 0) {
 
 ---
 
+## ValidationPatterns Class - Centralized Error Messages
+
+### Why Centralize Error Messages?
+
+Instead of writing error messages throughout the code, they're all defined in one place: `ValidationPatterns.java`
+
+**Benefits:**
+- ✅ Consistency - same error message everywhere
+- ✅ Easy to update - change in one place, applies everywhere
+- ✅ No typos - message is defined once
+- ✅ Maintainability - easy to find all error messages
+
+### The ValidationPatterns Class
+
+**Location:** `src/com/banking/utilities/ValidationPatterns.java`
+
+```java
+public class ValidationPatterns {
+    // ========== PATTERN CONSTANTS ==========
+    public static final String ACCOUNT_NO_PATTERN = "^ACC\\d{3}$";
+    public static final String CUSTOMER_ID_PATTERN = "^C\\d{3}$";
+    public static final String PROFILE_ID_PATTERN = "^P\\d{3}$";
+
+    // ========== ERROR MESSAGE CONSTANTS ==========
+    // Account validation errors
+    public static final String ACCOUNT_NO_ERROR =
+        "Account number must follow format ACC### (e.g., ACC001)";
+    public static final String ACCOUNT_NO_EMPTY_ERROR =
+        "Account number cannot be empty";
+
+    // Amount validation errors
+    public static final String AMOUNT_POSITIVE_ERROR =
+        "Amount must be positive";
+    public static final String AMOUNT_ZERO_ERROR =
+        "Amount cannot be zero";
+
+    // Customer validation errors
+    public static final String CUSTOMER_ID_ERROR =
+        "Customer ID must follow format C### (e.g., C001)";
+    public static final String CUSTOMER_NAME_EMPTY_ERROR =
+        "Customer name cannot be empty";
+
+    // Transaction validation errors
+    public static final String TX_ID_EMPTY_ERROR =
+        "Transaction ID cannot be empty";
+    public static final String TX_TYPE_NULL_ERROR =
+        "Transaction type cannot be null";
+
+    // ========== VALIDATION METHODS ==========
+    public static boolean matchesPattern(String value, String pattern) {
+        return value != null && value.matches(pattern);
+    }
+}
+```
+
+### How It's Used Throughout the Code
+
+#### Example 1: In Model Constructors
+```java
+// In Account.java
+public void setAccountNo(String accountNo) {
+    if (!ValidationPatterns.matchesPattern(accountNo,
+            ValidationPatterns.ACCOUNT_NO_PATTERN)) {
+        throw new IllegalArgumentException(ValidationPatterns.ACCOUNT_NO_ERROR);
+        //                                  ↑
+        //                    Message comes from ValidationPatterns!
+    }
+    this.accountNo = accountNo;
+}
+```
+
+#### Example 2: In Transaction Constructor
+```java
+// In Transaction.java
+public Transaction(String txId, TransactionType type, double amount) {
+    if (txId == null || txId.trim().isEmpty()) {
+        throw new IllegalArgumentException(ValidationPatterns.TX_ID_EMPTY_ERROR);
+    }
+
+    if (type == null) {
+        throw new IllegalArgumentException(ValidationPatterns.TX_TYPE_NULL_ERROR);
+    }
+
+    if (amount <= 0) {
+        throw new IllegalArgumentException(ValidationPatterns.AMOUNT_POSITIVE_ERROR);
+    }
+
+    // ... set fields
+}
+```
+
+#### Example 3: In InputValidator
+```java
+// In InputValidator.java
+public String getValidatedAccountNumber(String prompt, LinkedList<Account> accountList) {
+    String accountNo = scanner.nextLine().trim();
+
+    if (accountNo.isEmpty()) {
+        System.out.println(ValidationPatterns.ACCOUNT_NO_EMPTY_ERROR);
+        return null;
+    }
+
+    if (!ValidationPatterns.matchesPattern(accountNo,
+            ValidationPatterns.ACCOUNT_NO_PATTERN)) {
+        System.out.println(ValidationPatterns.ACCOUNT_NO_ERROR);
+        return null;
+    }
+
+    return accountNo;
+}
+```
+
+### Benefits in Action
+
+**Scenario:** Boss wants to change error message format
+
+**Without ValidationPatterns (BAD):**
+```
+Need to find and update in 20+ files:
+- Account.java (2 places)
+- Customer.java (3 places)
+- Transaction.java (1 place)
+- InputValidator.java (5 places)
+- ... etc
+```
+
+**With ValidationPatterns (GOOD):**
+```java
+// Change in ONE place:
+public static final String AMOUNT_POSITIVE_ERROR =
+    "Error: The amount must be greater than zero";  // Updated!
+
+// Automatically updates everywhere! 🎉
+```
+
+---
+
+## Handler Method Try-Catch Pattern
+
+### Complete User-Facing Flow with Exception Handling
+
+Handler methods wrap core operations in try-catch blocks to provide user-friendly error messages and handle exceptions gracefully.
+
+### Pattern Structure
+
+```java
+public void handleOperation() {
+    // Step 1: Get validated input
+    String input = validator.getValidatedInput(...);
+    if (input == null) return;  // User cancelled or validation failed
+
+    // Step 2: Wrap operation in try-catch
+    try {
+        // Call core method (might throw exception)
+        coreOperation(input);
+
+        // Log success
+        bankingSystem.logAction("OPERATION", "Success message");
+
+    } catch (IllegalArgumentException e) {
+        // Handle exception with user-friendly message
+        System.out.println("✗ Error: " + e.getMessage());
+    }
+}
+```
+
+### Example 1: handleDeposit() in TransactionProcessor
+
+```java
+public void handleDeposit() {
+    System.out.println("\n--- DEPOSIT ---");
+
+    // Validate account number
+    String accountNo = this.validator.getValidatedAccountNumber(
+            "Enter account number: ", this.accountList);
+    if (accountNo == null) return;
+
+    // Check access control
+    if (!this.bankingSystem.canAccessAccount(accountNo)) {
+        System.out.println("✗ Access denied.");
+        return;
+    }
+
+    // Validate amount
+    double amount = this.validator.getValidatedPositiveAmount(
+            "Enter amount to deposit: $");
+    if (amount == -1) return;
+
+    // ========== TRY-CATCH WRAPPER ==========
+    try {
+        // Call core deposit method (creates Transaction, validates amount)
+        if (this.deposit(accountNo, amount)) {
+            this.bankingSystem.logAction("DEPOSIT",
+                String.format("Deposited $%.2f to %s", amount, accountNo));
+        }
+    } catch (IllegalArgumentException e) {
+        // Catch exceptions from Transaction constructor or Account methods
+        System.out.println("✗ Error processing deposit: " + e.getMessage());
+        // User sees: "✗ Error processing deposit: Amount must be positive"
+    }
+}
+```
+
+### Example 2: handleCreateCustomer() in CustomerManager
+
+```java
+public void handleCreateCustomer() {
+    System.out.println("\n--- CREATE CUSTOMER ---");
+
+    // Get customer name
+    String name = validator.getValidatedNonEmptyString("Enter customer name: ");
+    if (name == null) return;
+
+    // ========== TRY-CATCH WRAPPER ==========
+    try {
+        // Generate customer ID
+        String customerId = generateNextCustomerId();
+
+        // Create customer (constructor validates name)
+        Customer customer = new Customer(customerId, name);
+        customers.add(customer);
+
+        // Log action
+        bankingSystem.logAction("CREATE_CUSTOMER",
+            "Created customer " + customerId + " - " + name);
+
+        System.out.println("✓ Customer created successfully!");
+
+    } catch (IllegalArgumentException e) {
+        // Catches validation errors from Customer constructor
+        System.out.println("✗ Error creating customer: " + e.getMessage());
+        // User sees: "✗ Error creating customer: Customer name cannot be empty"
+    }
+}
+```
+
+### Example 3: handleTransfer() - Multiple Validations
+
+```java
+public void handleTransfer() {
+    System.out.println("\n--- TRANSFER ---");
+
+    // Validate FROM account
+    String fromAccountNo = validator.getValidatedAccountNumber(
+            "From account: ", accountList);
+    if (fromAccountNo == null) return;
+
+    // Check access to FROM account
+    if (!bankingSystem.canAccessAccount(fromAccountNo)) {
+        System.out.println("✗ Access denied to source account");
+        return;
+    }
+
+    // Validate TO account
+    String toAccountNo = validator.getValidatedAccountNumber(
+            "To account: ", accountList);
+    if (toAccountNo == null) return;
+
+    // Validate amount
+    double amount = validator.getValidatedPositiveAmount(
+            "Enter amount: $");
+    if (amount == -1) return;
+
+    // ========== TRY-CATCH WRAPPER ==========
+    try {
+        if (this.transfer(fromAccountNo, toAccountNo, amount)) {
+            bankingSystem.logAction("TRANSFER",
+                String.format("Transferred $%.2f from %s to %s",
+                    amount, fromAccountNo, toAccountNo));
+        }
+    } catch (IllegalArgumentException e) {
+        System.out.println("✗ Error processing transfer: " + e.getMessage());
+    }
+}
+```
+
+### Why This Pattern?
+
+**Without try-catch wrapper:**
+```java
+public void handleDeposit() {
+    String accountNo = validator.getValidatedAccountNumber(...);
+    double amount = validator.getValidatedPositiveAmount(...);
+
+    this.deposit(accountNo, amount);  // Exception crashes program! 💥
+}
+```
+
+**With try-catch wrapper:**
+```java
+public void handleDeposit() {
+    String accountNo = validator.getValidatedAccountNumber(...);
+    double amount = validator.getValidatedPositiveAmount(...);
+
+    try {
+        this.deposit(accountNo, amount);  // Exception caught gracefully ✅
+    } catch (IllegalArgumentException e) {
+        System.out.println("✗ Error: " + e.getMessage());  // User-friendly!
+    }
+}
+```
+
+**Benefits:**
+- ✅ Program doesn't crash on invalid input
+- ✅ User sees helpful error messages
+- ✅ Operations can be retried
+- ✅ Audit logging still happens for valid operations
+- ✅ Consistent error handling across all operations
+
+---
+
 ## Key Takeaways
 
 1. ✅ `getMessage()` is **built-in Java**, you provide the **message text**

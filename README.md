@@ -25,6 +25,9 @@ This project includes comprehensive documentation files:
 | **[CLASS_RELATIONSHIPS.md](CLASS_RELATIONSHIPS.md)** | Class diagrams and relationship explanations |
 | **[DATA_STRUCTURES.md](DATA_STRUCTURES.md)** | Data structures and algorithms explained |
 | **[TRANSACTION_LOGIC_EXPLAINED.md](TRANSACTION_LOGIC_EXPLAINED.md)** | How deposit, withdraw, and transfer work |
+| **[EXCEPTION_HANDLING_NOTES.md](EXCEPTION_HANDLING_NOTES.md)** | Exception handling and validation strategies |
+| **[CUSTOMER_USER_LINKING_EXPLAINED.md](CUSTOMER_USER_LINKING_EXPLAINED.md)** | How customers link to user accounts |
+| **[GETTERS_SETTERS_EXPLAINED.md](GETTERS_SETTERS_EXPLAINED.md)** | Why models have getters/setters and managers don't |
 
 ## ✨ Features
 
@@ -32,6 +35,8 @@ This project includes comprehensive documentation files:
 - ✅ Account Management (Savings & Checking)
 - ✅ Transaction Processing (Deposit, Withdraw, Transfer)
 - ✅ User Authentication (Admin & Customer roles)
+- ✅ Password Change & Security
+- ✅ Access Control (customers can only access their own accounts)
 - ✅ Audit Logging
 - ✅ Sorting Algorithms (Insertion Sort)
 - ✅ Data Structures (LinkedList, Stack)
@@ -48,7 +53,7 @@ This project includes comprehensive documentation files:
 - **Total Files:** 22 Java files
 - **Total Lines:** ~4,058 lines (simplified from ~6,000+)
 - **Packages:** 4 (models, managers, auth, utilities)
-- **Documentation:** 5 comprehensive MD files
+- **Documentation:** 8 comprehensive MD files
 
 ## 🏗️ Project Structure
 

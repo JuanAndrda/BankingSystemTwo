@@ -438,6 +438,182 @@ checking.withdraw(1200.0);  // SUCCESS - overdraft allows it (balance + 500)
 
 ---
 
+### Example 4: UserAccount → Customer Linking
+
+```java
+// UserAccount links to Customer through linkedCustomerId field
+public class UserAccount extends User {
+    private String linkedCustomerId;  // THE KEY LINK!
+
+    public String getLinkedCustomerId() {
+        return this.linkedCustomerId;
+    }
+}
+
+// Usage in access control
+public boolean canAccessAccount(String accountNo) {
+    // Get current logged-in user
+    User currentUser = authManager.getCurrentUser();
+
+    if (currentUser instanceof Admin) {
+        return true;  // Admins can access all accounts
+    }
+
+    if (currentUser instanceof UserAccount) {
+        UserAccount userAcct = (UserAccount) currentUser;
+        String customerIdFromUser = userAcct.getLinkedCustomerId();  // "C001"
+
+        // Find the account
+        Account account = AccountUtils.findAccount(accountList, accountNo);
+        String customerIdFromAccount = account.getOwner().getCustomerId();  // "C001"
+
+        // Only allow access if IDs match!
+        return customerIdFromUser.equals(customerIdFromAccount);
+    }
+
+    return false;
+}
+```
+
+**Flow:**
+```
+UserAccount (username: "alice")
+    ↓ linkedCustomerId = "C001"
+Customer (customerId: "C001", name: "Alice")
+    ↓ accounts list
+Account (accountNo: "ACC001", owner: Customer "C001")
+```
+
+**This is how the system enforces:**
+- Alice can only access HER accounts
+- Bob can only access HIS accounts
+- Admin can access ALL accounts
+
+---
+
+### Example 5: Cross-Manager Dependencies
+
+#### CustomerManager → AccountManager
+
+```java
+public class CustomerManager {
+    private LinkedList<Customer> customers;
+    private LinkedList<Account> accountList;
+    private AccountManager accountMgr;  // Cross-manager dependency!
+
+    // Setter injection
+    public void setAccountManager(AccountManager accountMgr) {
+        this.accountMgr = accountMgr;
+    }
+
+    // Used in onboarding workflow
+    public void handleCreateCustomer() {
+        // Step 1: Create customer
+        Customer newCustomer = new Customer(...);
+
+        // Step 2: Create profile
+        CustomerProfile profile = new CustomerProfile(...);
+
+        // Step 3: Offer to create first account
+        System.out.println("Would you like to create an account now? (yes/no)");
+        if (scanner.nextLine().equalsIgnoreCase("yes")) {
+            // CustomerManager calls AccountManager!
+            this.accountMgr.handleCreateAccount(newCustomer);
+        }
+    }
+}
+```
+
+**Why This Relationship Exists:**
+- Integrated onboarding workflow needs both managers
+- Creates seamless user experience
+- Customer → Profile → Account in one session
+
+---
+
+### Example 6: Circular Dependency Resolution
+
+#### Problem: BankingSystem ↔ Managers
+
+Managers need BankingSystem for:
+- `canAccessAccount()` - access control checks
+- `getCurrentUser()` - getting logged-in user
+- `logAction()` - audit logging
+
+But BankingSystem creates the managers! This is a **circular dependency**.
+
+#### Solution: Two-Phase Initialization
+
+```java
+public class BankingSystem {
+    private CustomerManager customerMgr;
+    private AccountManager accountMgr;
+    private TransactionProcessor transactionProcessor;
+
+    public BankingSystem(Scanner scanner) {
+        // ========== PHASE 1: Create objects (no circular refs) ==========
+        this.customerMgr = new CustomerManager(customers, accountList, scanner, validator);
+        this.accountMgr = new AccountManager(customers, accountList, scanner, validator);
+        this.transactionProcessor = new TransactionProcessor(accountList, scanner, validator);
+
+        // ========== PHASE 2: Wire up circular references via setters ==========
+        this.customerMgr.setBankingSystem(this);  // Now CustomerManager can call this.bankingSystem
+        this.accountMgr.setBankingSystem(this);    // Now AccountManager can call this.bankingSystem
+        this.transactionProcessor.setBankingSystem(this);  // Now TransactionProcessor can call this.bankingSystem
+
+        // ========== PHASE 3: Wire up cross-manager dependencies ==========
+        this.customerMgr.setAccountManager(this.accountMgr);  // For onboarding workflow
+    }
+}
+```
+
+**In Each Manager:**
+```java
+public class CustomerManager {
+    private BankingSystem bankingSystem;  // Reference back to parent
+
+    // Setter injection (called in Phase 2)
+    public void setBankingSystem(BankingSystem bankingSystem) {
+        this.bankingSystem = bankingSystem;
+    }
+
+    // Now can use BankingSystem methods
+    public void handleDeleteCustomer() {
+        // Log the action using BankingSystem
+        this.bankingSystem.logAction("DELETE_CUSTOMER", "Deleted customer " + customerId);
+
+        // Perform deletion
+        customers.remove(customer);
+    }
+}
+```
+
+**Pattern Benefits:**
+- ✅ Resolves circular dependency safely
+- ✅ Managers can access parent methods (logging, access control)
+- ✅ Clean separation of concerns
+- ✅ No null pointer exceptions
+
+**Visual:**
+```
+Phase 1 (Construction):
+    BankingSystem creates → CustomerManager
+                          → AccountManager
+                          → TransactionProcessor
+
+Phase 2 (Wiring):
+    BankingSystem ←────────┐
+         │                 │
+         ├─→ CustomerManager (bankingSystem field set)
+         ├─→ AccountManager (bankingSystem field set)
+         └─→ TransactionProcessor (bankingSystem field set)
+
+Phase 3 (Cross-Dependencies):
+    CustomerManager.accountMgr = accountMgr
+```
+
+---
+
 ## Relationship Summary Table
 
 | Relationship Type | Example | Description | Code Location |

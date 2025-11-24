@@ -161,15 +161,31 @@ public class CustomerManager {
     private InputValidator validator;
     private Scanner scanner;
 
+    // Added fields for additional functionality:
+    private BankingSystem bankingSystem;  // For audit logging & access control
+    private AccountManager accountMgr;    // For integrated onboarding workflow
+    private int customerIdCounter = 1;    // For auto-generating customer IDs
+
     // Constructor
     public CustomerManager(LinkedList<Customer> customers,
                           LinkedList<Account> accountList,
-                          InputValidator validator,
-                          Scanner scanner) {
+                          Scanner scanner,
+                          InputValidator validator) {
         this.customers = customers;
         this.accountList = accountList;
-        this.validator = validator;
         this.scanner = scanner;
+        this.validator = validator;
+        // Counter initialized by scanning existing customers
+        this.customerIdCounter = findMaxCustomerId(customers) + 1;
+    }
+
+    // Setter injection for circular dependency resolution
+    public void setBankingSystem(BankingSystem bankingSystem) {
+        this.bankingSystem = bankingSystem;
+    }
+
+    public void setAccountManager(AccountManager accountMgr) {
+        this.accountMgr = accountMgr;
     }
 
     // NO getters like getCustomers() or getAccountList()

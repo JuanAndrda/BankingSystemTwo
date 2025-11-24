@@ -316,6 +316,110 @@ Every operation creates a `Transaction` object that records:
 - Status (COMPLETED or FAILED)
 - Timestamp
 
+### 4. Handler Methods (Complete User-Facing Flow)
+
+The core transaction methods (`deposit()`, `withdraw()`, `transfer()`) are wrapped by "handler" methods that provide:
+- User input validation using InputValidator
+- Access control checks (customers can only access their own accounts)
+- Audit logging
+- User-friendly error messages
+
+#### Handler Method: handleDeposit()
+**Location:** `TransactionProcessor.java` (approximately lines 123-143)
+
+```java
+public void handleDeposit() {
+    System.out.println("\n--- DEPOSIT ---");
+
+    // Step 1: Get and validate account number
+    String accountNo = this.validator.getValidatedAccountNumber(
+            "Enter account number: ", this.accountList);
+    if (accountNo == null) return;
+
+    // Step 2: Check access control (customers can only access their accounts!)
+    if (!this.bankingSystem.canAccessAccount(accountNo)) {
+        System.out.println("✗ Access denied. You can only deposit to your own accounts.");
+        return;
+    }
+
+    // Step 3: Get and validate amount
+    double amount = this.validator.getValidatedPositiveAmount("Enter amount to deposit: $");
+    if (amount == -1) return;
+
+    // Step 4: Call core deposit method
+    if (this.deposit(accountNo, amount)) {
+        // Step 5: Log the action for audit trail
+        this.bankingSystem.logAction("DEPOSIT",
+            String.format("Deposited $%.2f to %s", amount, accountNo));
+    }
+}
+```
+
+**Complete Flow:**
+```
+User → Handler Method → Access Control → Core Method → Audit Log
+  ↓           ↓              ↓               ↓            ↓
+Input   Validation     canAccessAccount()  deposit()  logAction()
+```
+
+#### Handler Method: handleWithdraw()
+Similar structure to `handleDeposit()`:
+1. Validate account number
+2. **Check access control** (THIS IS CRITICAL - prevents unauthorized access)
+3. Validate amount
+4. Call `withdraw()`
+5. Log action
+
+#### Handler Method: handleTransfer()
+Most complex handler - needs TWO accounts:
+1. Validate FROM account
+2. **Check access to FROM account** (can't transfer from someone else's account!)
+3. Validate TO account
+4. Validate amount
+5. Call `transfer()`
+6. Log action
+
+**Why This Matters:**
+```java
+// Without access control (BAD):
+Customer Bob could call: deposit("ACC001", 1000000.00)  // Alice's account!
+
+// With access control (GOOD):
+if (!bankingSystem.canAccessAccount("ACC001")) {
+    System.out.println("✗ Access denied");  // Bob blocked!
+    return;
+}
+```
+
+### 5. Transaction Status Tracking
+
+Every transaction has a status that's validated:
+
+```java
+// In Transaction.java
+public void setStatus(String status) {
+    if (!status.equals("COMPLETED") && !status.equals("FAILED")) {
+        throw new IllegalArgumentException("Status must be COMPLETED or FAILED");
+    }
+    this.status = status;
+}
+```
+
+**Important:** Failed transactions are STILL recorded in history!
+
+**Why?** For audit purposes - the system needs to track failed attempts.
+
+```java
+// Example from transfer():
+if (fromAccount.withdraw(amount)) {
+    toAccount.deposit(amount);
+    tx.setStatus("COMPLETED");  // Success!
+} else {
+    tx.setStatus("FAILED");     // Failed, but still recorded!
+    fromAccount.addTransaction(tx);  // Added to history for auditing
+}
+```
+
 ---
 
 ## Code Flow Diagrams

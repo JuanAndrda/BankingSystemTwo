@@ -264,6 +264,12 @@ public Stack<Transaction> getAccountTransactionsAsStack(String accountNo) {
 - ✅ Demonstrates LIFO data structure (CC 204 requirement)
 - ✅ Easy to display in reverse order
 
+**IMPORTANT: Stack is for DISPLAY Only!**
+- ⚠️ Transactions are **STORED** in LinkedList (maintains chronological order)
+- ⚠️ Stack is **CREATED** temporarily for display purposes
+- ⚠️ After displaying, the Stack is discarded
+- ⚠️ This ensures data integrity - original order is preserved in LinkedList
+
 **Visualization:**
 ```
 LinkedList (chronological):
@@ -455,6 +461,91 @@ private void insertionSortByBalance(LinkedList<Account> accountList) {
 - ✅ Nearly sorted data
 - ✅ Simple to implement and understand
 - ❌ Not for large datasets (use QuickSort or MergeSort instead)
+
+### Why Two Separate Sort Methods?
+
+**Question:** Why have `insertionSortByName()` and `insertionSortByBalance()` instead of one method with a parameter?
+
+**Answer:** Educational demonstration and clarity.
+
+**Code Design:**
+```java
+// In AccountManager.java
+public void handleSortAccountsByName() {
+    displayAccountsBeforeSort();  // Show unsorted list
+    insertionSortByName(this.accountList);  // Sort alphabetically
+    displayAccountsAfterSort();  // Show sorted list
+}
+
+public void handleSortAccountsByBalance() {
+    displayAccountsBeforeSort();  // Show unsorted list
+    insertionSortByBalance(this.accountList);  // Sort by balance (descending)
+    displayAccountsAfterSort();  // Show sorted list
+}
+```
+
+**Benefits:**
+- ✅ Clear demonstration of sorting algorithm in action
+- ✅ Each method shows different comparison logic
+- ✅ Educational: Students can see how the same algorithm adapts to different criteria
+- ✅ Easier to debug and understand than a single parameterized method
+
+---
+
+### Auto-Generated ID Counter System
+
+**Problem:** Generating unique IDs without collisions
+
+#### Initial Approach (BUGGY)
+```java
+// OLD APPROACH - HAS BUG!
+this.customerIdCounter = customers.size() + 1;
+
+// Example bug:
+// customers = [C001, C002, C003]  → counter = 4 ✓
+// Delete C002
+// customers = [C001, C003]         → counter = 3 ❌ (collision with existing C003!)
+```
+
+#### Fixed Approach (ROBUST)
+```java
+// NEW APPROACH - SCANS FOR MAXIMUM ID
+private int findMaxCustomerId(LinkedList<Customer> customers) {
+    int maxId = 0;
+    for (Customer c : customers) {
+        String idStr = c.getCustomerId().substring(1);  // Remove "C" prefix
+        int idNum = Integer.parseInt(idStr);
+        if (idNum > maxId) {
+            maxId = idNum;
+        }
+    }
+    return maxId;
+}
+
+// In constructor:
+this.customerIdCounter = findMaxCustomerId(customers) + 1;
+
+// Example with bug fix:
+// customers = [C001, C003, C005]  → maxId = 5, counter = 6 ✓
+// Next customer will be C006 (no collision!)
+```
+
+**How It Works:**
+1. Loop through all existing customers
+2. Extract numeric part of each ID (C001 → 1, C002 → 2)
+3. Find the maximum ID number
+4. Set counter to max + 1
+
+**Applied to All ID Types:**
+- Customer IDs: C001, C002, C003...
+- Account Numbers: ACC001, ACC002, ACC003...
+- Profile IDs: P001, P002, P003...
+
+**Benefits:**
+- ✅ Prevents ID collisions even after deletions
+- ✅ Works with gaps in sequence (C001, C003, C007 → next is C008)
+- ✅ Robust against edge cases
+- ✅ O(n) initialization, but only runs once
 
 ---
 
